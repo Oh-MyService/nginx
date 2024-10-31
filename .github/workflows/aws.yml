@@ -1,0 +1,37 @@
+name: Deploy Nginx Proxy Manager to Amazon Lightsail
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  LIGHTSAIL_INSTANCE_IP: ${{ secrets.LIGHTSAIL_INSTANCE_IP }}
+  SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+  SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install SSH and sshpass
+      run: sudo apt-get install -y openssh-client sshpass
+
+    - name: Transfer Docker Compose file
+      run: |
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" scp -o StrictHostKeyChecking=no \
+          docker-compose.yml $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP:~/docker-compose.yml
+
+    - name: Deploy to Amazon Lightsail using sshpass
+      run: |
+        sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no $SSH_USERNAME@$LIGHTSAIL_INSTANCE_IP << EOF
+          # Pull latest image and restart Nginx Proxy Manager service using Docker Compose
+          docker-compose -f ~/docker-compose.yml down || true
+          docker-compose -f ~/docker-compose.yml pull
+          docker-compose -f ~/docker-compose.yml up -d
+        EOF
